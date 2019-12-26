@@ -49,8 +49,8 @@ Private Sub buildJiraSheet()
     Dim jiraSheet As Worksheet
     Set jiraSheet = Worksheets("Jira")
     jiraSheet.Rows.Clear
-    jiraSheet.Range("A1:L1") = Array("", "Labels", "Priority", "Test Case Name", "AC", _
-        "Description", "Component", "Test Step", "Test Data", "Test results", "Assignee", "Linked Issues")
+    jiraSheet.Range("A1:M1") = Array("", "Labels", "Priority", "Test Case Name", "AC", _
+        "Description", "Component", "Test Step", "Test Data", "Test results", "Assignee", "Linked Issues", "Jira ID")
         
     Dim index As Integer
     For index = LBound(testcases) To UBound(testcases)
@@ -72,6 +72,7 @@ Private Sub buildJiraSheet()
             jiraSheet.Range("D" & rowIndex) = testcases(index)("JiraSubjectPrefix") & " " & testcases(index)("TestCaseName")
             jiraSheet.Range("F" & rowIndex) = testcases(index)("Description")
             jiraSheet.Range("L" & rowIndex) = testcases(index)("LinkedBusinessUserStory")
+            jiraSheet.Range("M" & rowIndex) = testcases(index)("JiraID")
             rowIndex = rowIndex + 1
         End If
     Next
