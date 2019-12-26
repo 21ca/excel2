@@ -6,13 +6,7 @@ Public Sub FillBackJiraID()
     Dim jiraIdRange As Range
     Set jiraIdRange = jiraSheet.Range("M2", jiraSheet.Range("M1048000").End(xlUp))
     
-    Dim caseName As String
-    Dim caseIndex As Integer
-    caseIndex = 0
-    
-    
     Dim currentJiraIdCell As Range, currentTestCaseCell As Range
-    
     Set currentJiraIdCell = caseDesignSheet.Range("B4")
     Set currentTestCaseCell = caseDesignSheet.Range("B1")
     
