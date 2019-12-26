@@ -1,0 +1,32 @@
+Public Sub FillBackJiraID()
+    Dim jiraSheet As Worksheet, caseDesignSheet As Worksheet
+    Set jiraSheet = Worksheets("Jira")
+    Set caseDesignSheet = Worksheets("Case_Design")
+    
+    Dim jiraIdRange As Range
+    Set jiraIdRange = jiraSheet.Range("M2", jiraSheet.Range("M1048000").End(xlUp))
+    
+    Dim caseName As String
+    Dim caseIndex As Integer
+    caseIndex = 0
+    
+    
+    Dim currentJiraIdCell As Range, currentTestCaseCell As Range
+    
+    Set currentJiraIdCell = caseDesignSheet.Range("B4")
+    Set currentTestCaseCell = caseDesignSheet.Range("B1")
+    
+    For Each jiraID In jiraIdRange
+        'MsgBox (jiraID)
+        currentJiraIdCell.Value = jiraID
+        
+        Do While currentTestCaseCell.Text = currentTestCaseCell.Next.Next.Text
+            Set currentTestCaseCell = currentTestCaseCell.Next.Next
+            Set currentJiraIdCell = currentJiraIdCell.Next.Next
+            
+            currentJiraIdCell.Value = jiraID
+        Loop
+        Set currentTestCaseCell = currentTestCaseCell.Next.Next
+        Set currentJiraIdCell = currentJiraIdCell.Next.Next
+    Next
+End Sub
