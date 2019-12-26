@@ -20,7 +20,7 @@ Public Sub FillBackJiraID()
         'MsgBox (jiraID)
         currentJiraIdCell.Value = jiraID
         
-        Do While currentTestCaseCell.Text = currentTestCaseCell.Next.Next.Text
+        Do While currentTestCaseCell.Value = currentTestCaseCell.Next.Next.Value
             Set currentTestCaseCell = currentTestCaseCell.Next.Next
             Set currentJiraIdCell = currentJiraIdCell.Next.Next
             
