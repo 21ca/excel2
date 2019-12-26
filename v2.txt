@@ -1,0 +1,245 @@
+Dim components As Object
+Dim testcases() As Object
+
+Public Sub test()
+    Application.ScreenUpdating = False
+    
+    buildComponents
+    'MsgBox (components("A1")(1))
+    
+    buildTestCases
+    'MsgBox (testcases(1)("label"))
+    'MsgBox (testcases(1)("steps")(2)("params"))
+    
+    buildJiraSheet
+     
+End Sub
+
+Private Sub buildTestCases()
+    Dim caseDesignSheet As Worksheet
+    Set caseDesignSheet = Worksheets("Case_Design")
+    
+    Dim testCaseCount As Integer
+    testCaseCount = (caseDesignSheet.Range("A1").CurrentRegion.Columns.Count - 1) / 2
+    'MsgBox ("Test Case total: " & testCaseCount)
+    ReDim testcases(1 To testCaseCount)
+    
+    Dim testCaseIndex As Integer
+    For testCaseIndex = 1 To testCaseCount
+        Dim testcase As Object
+        Set testcase = CreateObject("Scripting.Dictionary")
+        testcase.Add "ID", caseDesignSheet.Range("A1").Offset(0, 2 * testCaseIndex - 1).Value
+        testcase.Add "JiraSubjectPrefix", caseDesignSheet.Range("A2").Offset(0, 2 * testCaseIndex - 1).Value
+        testcase.Add "TestCaseName", caseDesignSheet.Range("A3").Offset(0, 2 * testCaseIndex - 1).Value
+        testcase.Add "JiraID", caseDesignSheet.Range("A4").Offset(0, 2 * testCaseIndex - 1).Value
+        testcase.Add "Component", caseDesignSheet.Range("A5").Offset(0, 2 * testCaseIndex - 1).Value
+        testcase.Add "LinkedBusinessUserStory", caseDesignSheet.Range("A6").Offset(0, 2 * testCaseIndex - 1).Value
+        testcase.Add "Priority", caseDesignSheet.Range("A7").Offset(0, 2 * testCaseIndex - 1).Value
+        testcase.Add "Designer", caseDesignSheet.Range("A8").Offset(0, 2 * testCaseIndex - 1).Value
+        testcase.Add "Labels", caseDesignSheet.Range("A9").Offset(0, 2 * testCaseIndex - 1).Value
+        testcase.Add "steps", buildTestCaseSteps(caseDesignSheet, testCaseIndex)
+        
+        Set testcases(testCaseIndex) = testcase
+    Next
+End Sub
+
+
+Private Sub buildJiraSheet()
+    OpenJiraSheet
+    Dim jiraSheet As Worksheet
+    Set jiraSheet = Worksheets("Jira")
+    jiraSheet.Rows.Clear
+    jiraSheet.Range("A1:L1") = Array("", "Labels", "Priority", "Test Case Name", "AC", _
+        "Description", "Component", "Test Step", "Test Data", "Test results", "Assignee", "Linked Issues")
+        
+    Dim index As Integer
+    For index = LBound(testcases) To UBound(testcases)
+        testcases(index).Add "Description", buildTestCaseDescription(testcases(index))
+        If index > 1 Then
+            If testcases(index)("ID") = testcases(index - 1)("ID") Then
+                testcases(index - 1)("Description") = testcases(index - 1)("Description") & vbCrLf & testcases(index)("Description")
+                testcases(index)("Description") = ""
+             End If
+        End If
+    Next
+    
+    Dim rowIndex As Integer
+    rowIndex = 2
+    For index = LBound(testcases) To UBound(testcases)
+        If testcases(index)("Description") <> "" Then
+            jiraSheet.Range("B" & rowIndex) = testcases(index)("Labels")
+            jiraSheet.Range("C" & rowIndex) = testcases(index)("Priority")
+            jiraSheet.Range("D" & rowIndex) = testcases(index)("JiraSubjectPrefix") & " " & testcases(index)("TestCaseName")
+            jiraSheet.Range("F" & rowIndex) = testcases(index)("Description")
+            jiraSheet.Range("L" & rowIndex) = testcases(index)("LinkedBusinessUserStory")
+            rowIndex = rowIndex + 1
+        End If
+    Next
+    
+End Sub
+
+Private Function buildTestCaseDescription(ByRef testcase As Object)
+    Dim desc As String, exampleHeader As String, exampleLine As String, exampleBody As String, exampleLines() As String
+    Dim isExampleLinesInitialized As Boolean
+    isExampleLinesInitialized = False
+    
+    desc = "Scenario Outline: " & testcase("TestCaseName") & vbCrLf
+    exampleHeader = ""
+    exampleBody = ""
+    
+    Dim steps() As Object
+    steps = testcase("steps")
+    Dim i As Integer
+    For i = LBound(steps) To UBound(steps)
+        Dim stepIndex As String, stepDesc As String, bddKey As String, params As String
+        stepIndex = steps(i)("index")
+        bddKey = Trim(components(stepIndex)(2))
+        If InStr(1, desc, bddKey) <> 0 Then
+            bddKey = "And"
+        End If
+        
+        stepDesc = Trim(components(stepIndex)(3))
+        stepDesc = Replace(stepDesc, Chr(10), Chr(10) & "And ")
+        
+        params = steps(i)("params")
+        If Len(params) > 0 Then
+            Dim paramTags() As String, paramLines() As String, paramLine As String
+            Dim lineIndex As Integer
+            paramLines = Split(Trim(params), Chr(10))
+            
+            If isExampleLinesInitialized = False Then
+                Dim lineCount As Integer
+                lineCount = UBound(paramLines) - LBound(paramLines) + 1
+                ReDim exampleLines(1 To lineCount) As String
+                For lineIndex = 1 To lineCount
+                    exampleLines(lineIndex) = "|"
+                Next
+                isExampleLinesInitialized = True
+            End If
+            
+            'paramValues = Split(params, ",")
+            
+            paramTags = findParams(stepDesc)
+            
+            Dim paramIndex As Integer
+            Dim paramValues() As String
+            For paramIndex = LBound(paramTags) To UBound(paramTags)
+                If InStr(1, paramTags(paramIndex), "{$") > 0 Then
+                    Dim paramTag As String
+                    paramTag = paramTags(paramIndex)
+                    paramTag = Replace(paramTag, "{$", "<")
+                    paramTag = Replace(paramTag, "}", ">")
+                    stepDesc = Replace(stepDesc, paramTags(paramIndex), paramTag)
+                    
+                    If Len(exampleHeader) = 0 Then
+                        exampleHeader = "|"
+                    End If
+                    
+                    paramTag = Mid(paramTag, 2, Len(paramTag) - 2)
+                    If InStr(1, exampleHeader, "|" & paramTag & "|") = 0 Then
+                        exampleHeader = exampleHeader & paramTag & "|"
+                        For lineIndex = LBound(paramLines) To UBound(paramLines)
+                            exampleLine = exampleLines(lineIndex + 1)
+                            paramValues = Split(paramLines(lineIndex), ",")
+                            exampleLine = exampleLine & Trim(paramValues(paramIndex - 1)) & "|"
+                            exampleLines(lineIndex + 1) = exampleLine
+                        Next
+                    End If
+                Else
+                    paramValues = Split(paramLines(0), ",")
+                    stepDesc = Replace(stepDesc, paramTags(paramIndex), Trim(paramValues(paramIndex - 1)))
+                End If
+            Next
+        End If
+        desc = desc & bddKey & " " & stepDesc & vbCrLf
+    Next
+    
+    If isExampleLinesInitialized = True Then
+        For i = LBound(exampleLines) To UBound(exampleLines)
+            exampleBody = exampleBody & exampleLines(i) & vbCrLf
+        Next
+    End If
+        
+    buildTestCaseDescription = desc & "EXAMPLES" & vbCrLf & exampleHeader & vbCrLf & exampleBody
+End Function
+
+Private Function findParams(ByRef s As String)
+    Dim reg As Object
+    Dim match As Object, matchs As Object
+    Set reg = CreateObject("vbscript.regExp")
+    reg.Global = True
+    reg.Pattern = "\{.*?\}"
+    Set matchs = reg.Execute(s)
+    Dim result() As String
+    ReDim result(1 To matchs.Count)
+    
+    Dim i As Integer
+    i = 1
+    For Each match In matchs
+        result(i) = match.Value
+        i = i + 1
+    Next
+    findParams = result
+End Function
+
+
+Private Function buildTestCaseSteps(ByRef sheet As Worksheet, ByVal testCaseIndex As Integer)
+    Dim steps() As Object
+    Dim r As Range
+    
+    Dim stepRange As Range
+    Set stepRange = sheet.Range(sheet.Range("A11").Offset(0, 2 * testCaseIndex - 1), sheet.Range("A11").Offset(1048000, 2 * testCaseIndex - 1).End(xlUp))
+    
+    ReDim steps(1 To stepRange.Rows.Count)
+    
+    Dim stepIndex As Integer
+    stepIndex = 1
+    
+    For Each r In stepRange
+        If r.Value = "" Then
+            Exit For
+        End If
+        
+        Dim step As Object
+        Set step = CreateObject("Scripting.Dictionary")
+        step.Add "index", r.Value
+        step.Add "params", r.Offset(0, 1).Value
+        Set steps(stepIndex) = step
+        stepIndex = stepIndex + 1
+    Next
+    buildTestCaseSteps = steps
+End Function
+
+Private Sub buildComponents()
+    Set components = CreateObject("Scripting.Dictionary")
+    Dim componentSheet As Worksheet
+    Set componentSheet = Worksheets("Component")
+    
+    Dim row As Range
+    For Each row In componentSheet.Range("A1").CurrentRegion.Rows
+        If row.row <> 1 Then
+            Dim data(1 To 3) As String
+            data(1) = row.Cells(2).Value
+            data(2) = row.Cells(3).Value
+            data(3) = row.Cells(4).Value
+            components.Add row.Cells(1).Value, data
+        End If
+    Next
+End Sub
+
+
+Private Sub OpenJiraSheet()
+    Dim sheet As Worksheet
+    For Each sheet In Worksheets
+        If sheet.Name = "Jira" Then
+            sheet.Activate
+            sheet.Rows.Clear
+            Exit Sub
+        End If
+    Next
+
+    Worksheets.Add after:=Worksheets(Worksheets.Count)
+    Application.ActiveSheet.Name = "Jira"
+    
+End Sub
+
